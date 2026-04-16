@@ -17,9 +17,12 @@ include_directories(
     3rdParty/glm
     3rdParty/stb
     src
+    src/core
+    src/scene
+    src/utils
 )
 
-file(GLOB SOURCES "src/*.cpp")
+file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 add_executable(snooker ${SOURCES})
 
