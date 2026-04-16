@@ -33,6 +33,15 @@ snooker
 *.suo
 *.user
 
+# Personal notes
+notes/
+
+# GLM documentation (generated, not source)
+3rdParty/glm/doc/api/
+3rdParty/glm/doc/man.doxy
+3rdParty/glm/doc/manual.pdf
+3rdParty/glm/manual.md
+
 # macOS
 .DS_Store
 .AppleDouble
