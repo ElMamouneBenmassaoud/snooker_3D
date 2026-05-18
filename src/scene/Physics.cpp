@@ -24,6 +24,12 @@ const std::array<float, 6> Physics::POCKET_R = {{
 }};
 
 // ---------------------------------------------------------------------------
+void Physics::resetShotTracking() {
+    shotFirstContact = -1;
+    shotPottedBalls.clear();
+}
+
+// ---------------------------------------------------------------------------
 Physics::Physics(const std::vector<glm::vec3>& initialPositions) {
     balls.resize(initialPositions.size());
     for (int i = 0; i < (int)initialPositions.size(); i++)
@@ -64,11 +70,9 @@ void Physics::step() {
     }
 
     // 2. Pocket detection — BEFORE cushion resolution.
-    //    Uses swept check (prevPos → pos) to catch fast balls that would
-    //    otherwise tunnel through the pocket capture zone in one step.
-    for (auto& b : balls) {
-        if (!b.active || b.sinking) continue;
-        checkPocket(b);
+    for (int i = 0; i < (int)balls.size(); i++) {
+        if (!balls[i].active || balls[i].sinking) continue;
+        checkPocket(balls[i], i);
     }
 
     // 3. Sphere-plane: cushion collisions (RTR Ch22 — sphere/plane intersection)
@@ -83,7 +87,10 @@ void Physics::step() {
         if (!balls[i].active || balls[i].sinking) continue;
         for (int j = i + 1; j < (int)balls.size(); j++) {
             if (!balls[j].active || balls[j].sinking) continue;
-            resolveBallBall(balls[i], balls[j]);
+            bool hit = resolveBallBall(balls[i], balls[j]);
+            // Track first ball touched by the cue ball (index 0)
+            if (hit && shotFirstContact == -1 && (i == 0 || j == 0))
+                shotFirstContact = (i == 0) ? j : i;
         }
     }
 }
@@ -143,33 +150,58 @@ void Physics::applyFriction(BallState& b) {
 }
 
 // ---------------------------------------------------------------------------
-// Apply a cue strike to the cue ball with spin effect.
+// Apply a cue strike to the cue ball.
 //
-// The hit point (u, v) on the cue ball face (each ∈ [-0.5, 0.5]):
-//   u > 0 → massé droit   u < 0 → massé gauche
-//   v > 0 → coulé         v < 0 → rétro
+// u, v ∈ [-1, 1] (spin selector, constrained to unit circle):
+//   v > 0 → coulé (topspin)   v < 0 → rétro (backspin)
+//   u > 0 → effet droit       u < 0 → effet gauche
 //
-// hitOffset = u·right·R + v·up·R   (offset from ball centre to cue tip contact)
-// spin = cross(hitOffset, shotDir·power) / (I/m),  I/m = (2/5)·R²
+// Back/top spin model:
+//   ω_roll = cross(up, shotDir) * power/R  — rolling spin for this shot direction
+//   cueBall.spin = ω_roll * v * SPIN_SCALE
+//
+//   SPIN_SCALE = 2.5:
+//     • |v| < 1.0   → ball rolls forward after sliding (decelerates more with spin)
+//     • |v| = 1.0   → stun (ball stops dead — NO reversal without a collision)
+//     After a ball-ball collision the cue ball vel drops to ~2.5 % of v0
+//     while spin is unchanged → spin >> stun threshold → strong rétro. ✓
+//
+//   Derivation of stun threshold:
+//     Linear decel:  a_v  = μk·g
+//     Angular decel: a_ω  = 5·μk·g / (2R)    (torque from table friction)
+//     Stun when both reach zero simultaneously:
+//       v0 / a_v = ω0 / a_ω   →   ω0_stun = 2.5 · v0/R
+//     With SPIN_SCALE = 2.5: ω_max = 2.5·v0/R = ω0_stun  → stun at |v|=1
+//
+// Side spin:
+//   cueBall.spin.y = -u * power/R * SIDE_SCALE
+//   Affects cushion rebounds (running / check side). No table-felt interaction
+//   because ω_y × r_c = 0 at the contact point r_c = (0, -R, 0).
 // ---------------------------------------------------------------------------
 void Physics::applyCueStrike(BallState& cueBall,
                               glm::vec3 shotDir, float power,
                               float u, float v) {
     shotDir = glm::normalize(shotDir);
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    // Local frame of the shot
-    glm::vec3 up    = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 right = glm::normalize(glm::cross(shotDir, up));
+    // Linear velocity (main impulse)
+    cueBall.vel  = shotDir * power;
+    cueBall.spin = glm::vec3(0.0f);
 
-    // Hit offset on cue ball face
-    glm::vec3 hitOffset = (u * right + v * up) * RADIUS;
+    // ---- Back / top spin (v axis) ----------------------------------------
+    // ω_roll is the angular velocity for pure rolling in the shot direction.
+    // Rolling constraint in applyFriction:  spin.z = -vel.x/R, spin.x = vel.z/R
+    //   →  ω_roll = cross(up, shotDir) * power/R
+    const float SPIN_SCALE = 1.8f;
+    glm::vec3 omega_roll = glm::cross(up, shotDir) * (power / RADIUS);
+    cueBall.spin += omega_roll * (v * SPIN_SCALE);
 
-    // Linear velocity
-    cueBall.vel = shotDir * power;
-
-    // Angular velocity:  ω = (hitOffset × F) / I,  F = shotDir·power (impulse/mass)
-    float I_inv = 5.0f / (2.0f * RADIUS * RADIUS);
-    cueBall.spin = glm::cross(hitOffset, shotDir * power) * I_inv;
+    // ---- Side spin (u axis) -----------------------------------------------
+    // Rotates ball around vertical Y-axis. Manifests at cushion rebounds.
+    // u > 0 → effet droit (ωy > 0): ball deflects RIGHT on far/near cushions
+    // u < 0 → effet gauche (ωy < 0): ball deflects LEFT on far/near cushions
+    const float SIDE_SCALE = 0.7f;
+    cueBall.spin.y = u * (power / RADIUS) * SIDE_SCALE;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,38 +210,91 @@ void Physics::applyCueStrike(BallState& cueBall,
 //   collision when |dist| < RADIUS  AND  ball moving toward the wall
 //   response: reflect normal component scaled by restitution E_BC
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Sphere-plane: cushion collisions with side-spin deflection.
+//
+// Normal reflection: v_normal *= -E_BC  (existing behaviour).
+//
+// Side-spin (ω_y) deflection — spin-only contribution, no translational
+// component, to avoid amplifying the ball's tangential speed:
+//
+//   Contact r_c, spin surface velocity = ω × r_c, tangential component:
+//     Left  (r_c = -R·x̂): contact_z = +ω_y·R  → kick_z = -ω_y·R·MU_CUSH
+//     Right (r_c = +R·x̂): contact_z = -ω_y·R  → kick_z = +ω_y·R·MU_CUSH
+//     Far   (r_c = -R·ẑ): contact_x = -ω_y·R  → kick_x = +ω_y·R·MU_CUSH  ← deflects RIGHT for ω_y>0
+//     Near  (r_c = +R·ẑ): contact_x = +ω_y·R  → kick_x = -ω_y·R·MU_CUSH
+//
+//   MU_CUSH = 0.08: small coefficient — spin is a gentle redirection, not
+//   a speed amplifier.  ω_y decays by SPIN_RETAIN each contact.
+// ---------------------------------------------------------------------------
 void Physics::resolveCushions(BallState& b) {
-    // Gap = distance along the wall within which the cushion is open for a pocket.
-    // Kept tight: the swept pocket detection in checkPocket handles tunnelling.
-    const float CORNER_GAP = POCKET_R[0];          // ~0.062 m each side of pocket
-    const float MIDDLE_GAP = POCKET_R[1] * 1.1f;  // ~0.075 m each side
+    const float CORNER_GAP  = POCKET_R[0];
+    const float MIDDLE_GAP  = POCKET_R[1] * 1.1f;
+    const float MU_CUSH     = 0.06f;   // spin→velocity transfer at cushion
+    const float SPIN_RETAIN = 0.85f;   // ω_y fraction kept after contact
 
-    // Left cushion  (x = -IX)
+    // Spin kick helpers (spin-only, no translational component)
+    float spinR = b.spin.y * RADIUS;   // pre-compute ω_y · R
+
+    // Left cushion (x = -IX)
     if (b.pos.x < -IX + RADIUS) {
         bool gap = (std::abs(b.pos.z - (-IZ)) < CORNER_GAP ||
                     std::abs(b.pos.z -   IZ)  < CORNER_GAP);
-        if (!gap) { b.pos.x = -IX + RADIUS; if (b.vel.x < 0.0f) b.vel.x = -b.vel.x * E_BC; }
+        if (!gap) {
+            b.pos.x = -IX + RADIUS;
+            if (b.vel.x < 0.0f) {
+                b.vel.x  = -b.vel.x * E_BC;
+                b.vel.z  -= spinR * MU_CUSH;   // contact_z = +ω_y·R → friction −z
+                b.spin.y *= SPIN_RETAIN;
+                spinR     = b.spin.y * RADIUS;
+            }
+        }
     }
     // Right cushion (x = +IX)
     if (b.pos.x > IX - RADIUS) {
         bool gap = (std::abs(b.pos.z - (-IZ)) < CORNER_GAP ||
                     std::abs(b.pos.z -   IZ)  < CORNER_GAP);
-        if (!gap) { b.pos.x = IX - RADIUS; if (b.vel.x > 0.0f) b.vel.x = -b.vel.x * E_BC; }
+        if (!gap) {
+            b.pos.x = IX - RADIUS;
+            if (b.vel.x > 0.0f) {
+                b.vel.x  = -b.vel.x * E_BC;
+                b.vel.z  += spinR * MU_CUSH;   // contact_z = -ω_y·R → friction +z
+                b.spin.y *= SPIN_RETAIN;
+                spinR     = b.spin.y * RADIUS;
+            }
+        }
     }
-    // Far cushion   (z = -IZ)
+    // Far cushion (z = -IZ)
     if (b.pos.z < -IZ + RADIUS) {
         bool gap = (std::abs(b.pos.x - (-IX)) < CORNER_GAP ||
                     std::abs(b.pos.x        ) < MIDDLE_GAP ||
                     std::abs(b.pos.x -   IX)  < CORNER_GAP);
-        if (!gap) { b.pos.z = -IZ + RADIUS; if (b.vel.z < 0.0f) b.vel.z = -b.vel.z * E_BC; }
+        if (!gap) {
+            b.pos.z = -IZ + RADIUS;
+            if (b.vel.z < 0.0f) {
+                b.vel.z  = -b.vel.z * E_BC;
+                b.vel.x  += spinR * MU_CUSH;   // contact_x = -ω_y·R → friction +x (right for ω_y>0)
+                b.spin.y *= SPIN_RETAIN;
+                spinR     = b.spin.y * RADIUS;
+            }
+        }
     }
-    // Near cushion  (z = +IZ)
+    // Near cushion (z = +IZ)
     if (b.pos.z > IZ - RADIUS) {
         bool gap = (std::abs(b.pos.x - (-IX)) < CORNER_GAP ||
                     std::abs(b.pos.x        ) < MIDDLE_GAP ||
                     std::abs(b.pos.x -   IX)  < CORNER_GAP);
-        if (!gap) { b.pos.z = IZ - RADIUS; if (b.vel.z > 0.0f) b.vel.z = -b.vel.z * E_BC; }
+        if (!gap) {
+            b.pos.z = IZ - RADIUS;
+            if (b.vel.z > 0.0f) {
+                b.vel.z  = -b.vel.z * E_BC;
+                b.vel.x  -= spinR * MU_CUSH;   // contact_x = +ω_y·R → friction -x
+                b.spin.y *= SPIN_RETAIN;
+                spinR     = b.spin.y * RADIUS;
+            }
+        }
     }
+    (void)spinR;  // silence unused-variable warning if no cushion was hit
 }
 
 // ---------------------------------------------------------------------------
@@ -230,7 +315,7 @@ void Physics::resolveCushions(BallState& b) {
 //   (1-t)·DT with the post-impulse velocities.
 // Case 3 — no intersection this step: skip.
 // ---------------------------------------------------------------------------
-void Physics::resolveBallBall(BallState& a, BallState& b) {
+bool Physics::resolveBallBall(BallState& a, BallState& b) {
     const float minD = 2.0f * RADIUS;
 
     glm::vec3 d0 = a.prevPos - b.prevPos;          // relative pos at step start
@@ -240,7 +325,7 @@ void Physics::resolveBallBall(BallState& a, BallState& b) {
         // --- Case 1: already overlapping → standard resolution ---
         glm::vec3 diff  = a.pos - b.pos;
         float     dist2 = glm::dot(diff, diff);
-        if (dist2 < 1e-8f) return;
+        if (dist2 < 1e-8f) return false;
         float     dist  = std::sqrt(dist2);
         glm::vec3 n     = diff / dist;
         float vRel = glm::dot(a.vel - b.vel, n);
@@ -251,40 +336,40 @@ void Physics::resolveBallBall(BallState& a, BallState& b) {
         }
         float ov = minD - dist;
         if (ov > 0.0f) { a.pos += n * (ov * 0.5f); b.pos -= n * (ov * 0.5f); }
-        return;
+        return true;
     }
 
     // --- Case 2: CCD swept test ---
-    glm::vec3 dv = (a.pos - a.prevPos) - (b.pos - b.prevPos); // relative displacement
+    glm::vec3 dv = (a.pos - a.prevPos) - (b.pos - b.prevPos);
     float A  = glm::dot(dv, dv);
-    if (A < 1e-12f) return;                        // no relative motion
+    if (A < 1e-12f) return false;
     float B    = 2.0f * glm::dot(d0, dv);
     float disc = B * B - 4.0f * A * c0;
-    if (disc < 0.0f) return;                       // trajectories miss each other
+    if (disc < 0.0f) return false;
 
-    float t = (-B - std::sqrt(disc)) / (2.0f * A); // earliest contact in [0,1]
-    if (t < 0.0f || t > 1.0f) return;
+    float t = (-B - std::sqrt(disc)) / (2.0f * A);
+    if (t < 0.0f || t > 1.0f) return false;
 
     // Position of both balls at contact time t
     glm::vec3 aT = a.prevPos + (a.pos - a.prevPos) * t;
     glm::vec3 bT = b.prevPos + (b.pos - b.prevPos) * t;
     glm::vec3 n  = aT - bT;
     float     d  = glm::length(n);
-    if (d < 1e-8f) return;
+    if (d < 1e-8f) return false;
     n /= d;
 
     // Impulse using post-friction velocities
     float vRel = glm::dot(a.vel - b.vel, n);
-    if (vRel >= 0.0f) return;                      // already separating
+    if (vRel >= 0.0f) return false;
 
     float j = -(1.0f + E_BB) * vRel * 0.5f;
     a.vel += j * n;
     b.vel -= j * n;
 
-    // Reposition: place at contact, then advance remaining step time
     float rem = (1.0f - t) * DT;
     a.pos = aT + a.vel * rem;
     b.pos = bT + b.vel * rem;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -294,16 +379,23 @@ void Physics::resolveBallBall(BallState& a, BallState& b) {
 //      tunnel through the capture radius in a single step.
 //   3. Safety boundary: ball escaped the table → sink unconditionally.
 // ---------------------------------------------------------------------------
-void Physics::checkPocket(BallState& b) {
+void Physics::checkPocket(BallState& b, int idx) {
     auto sink = [&]() {
         b.sinking = true; b.sinkT = 0.0f;
         b.vel = glm::vec3(0.0f); b.spin = glm::vec3(0.0f);
+        shotPottedBalls.push_back(idx);
     };
 
     for (int i = 0; i < 6; i++) {
         const float pr  = POCKET_R[i];
         const float px  = POCKETS[i].x;
         const float pz  = POCKETS[i].y;
+
+        // Middle pockets (indices 1 and 4) are recessed notches in the long cushion.
+        // A ball rolling along the cushion face (z ≈ ±(IZ-RADIUS)) must not be captured —
+        // only capture once the ball has actually entered the notch past the cushion face.
+        if (i == 1 && b.pos.z > -IZ + RADIUS * 0.5f) continue;  // far middle
+        if (i == 4 && b.pos.z <  IZ - RADIUS * 0.5f) continue;  // near middle
 
         // --- 1. Direct check ---
         float dx = b.pos.x - px, dz = b.pos.z - pz;

@@ -56,10 +56,11 @@ public:
     // Apply a cue strike to the cue ball with spin effect.
     // shotDir : normalised direction of the shot (XZ plane)
     // power   : initial speed (m/s)
-    // u, v    : hit point on cue ball face (each in [-0.5, 0.5]):
-    //             u > 0 → massé droit,  u < 0 → massé gauche
-    //             v > 0 → coulé,        v < 0 → rétro
-    // spin = cross(hitOffset, shotDir * power) / I,  I = (2/5)*R²
+    // u, v    : hit point on spin selector (each in [-1,1], constrained to unit circle):
+    //             u > 0 → effet droit,   u < 0 → effet gauche
+    //             v > 0 → coulé,         v < 0 → rétro
+    // Back/top: spin = cross(up, shotDir) * power/R * v * 4  (stun at |v|≈0.62)
+    // Side:     spin.y = -u * power/R * 2.5  (affects cushion rebounds)
     static void applyCueStrike(BallState& cueBall,
                                glm::vec3 shotDir, float power,
                                float u, float v);
@@ -76,11 +77,16 @@ public:
 
     float accumulator = 0.0f;
 
+    // Shot tracking — reset by resetShotTracking() before each cue strike.
+    int              shotFirstContact = -1;  // index of first ball touched by cue ball
+    std::vector<int> shotPottedBalls;        // indices of all balls pocketed this shot
+    void resetShotTracking();
+
 private:
     void step();
 
     static void applyFriction(BallState& b);
     static void resolveCushions(BallState& b);
-    static void resolveBallBall(BallState& a, BallState& b);
-    static void checkPocket(BallState& b);
+    static bool resolveBallBall(BallState& a, BallState& b);
+    void checkPocket(BallState& b, int idx);
 };
