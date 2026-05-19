@@ -1023,19 +1023,15 @@ int main() {
         glm::mat4 view;
         glm::vec3 viewPos;
         if (gBallInHand) {
-            // Top-down view of the whole table.
-            // Camera directly above the centre at 2.2 m.
-            // up=(0,0,-1): screen-right = world +x (baulk right, reds left),
-            //              screen-up    = world -z  (yellow at top, green at bottom).
-            // At FOV=45° and aspect 1.78, half-extents ≈ ±1.62 m (x) and ±0.91 m (z),
-            // which comfortably covers the table (IX=1.49, IZ=0.75).
-            viewPos = glm::vec3(0.0f, 2.2f, 0.0f);
+            // Top-down view. Camera raised to y=3.0 so the full table fits in the
+            // viewport area below the HUD bar without clipping any pocket.
+            viewPos = glm::vec3(0.0f, 3.0f, 0.0f);
             view    = glm::lookAt(viewPos,
                                   glm::vec3(0.0f, 0.0f, 0.0f),
                                   glm::vec3(0.0f, 0.0f, -1.0f));
         } else if (gBallsMoving) {
-            // Post-shot: same top-down view as ball-in-hand.
-            viewPos = glm::vec3(0.0f, 2.2f, 0.0f);
+            // Post-shot: same top-down view.
+            viewPos = glm::vec3(0.0f, 3.0f, 0.0f);
             view    = glm::lookAt(viewPos,
                                   glm::vec3(0.0f, 0.0f, 0.0f),
                                   glm::vec3(0.0f, 0.0f, -1.0f));
@@ -1049,7 +1045,7 @@ int main() {
                                   glm::vec3(0.0f, 1.0f, 0.0f));
         } else {
             // Top-down view of the whole table
-            viewPos = glm::vec3(0.0f, 2.2f, 0.0f);
+            viewPos = glm::vec3(0.0f, 3.0f, 0.0f);
             view    = glm::lookAt(viewPos,
                                   glm::vec3(0.0f, 0.0f, 0.0f),
                                   glm::vec3(0.0f, 0.0f, -1.0f));

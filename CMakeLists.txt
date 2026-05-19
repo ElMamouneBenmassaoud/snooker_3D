@@ -16,6 +16,7 @@ include_directories(
     3rdParty/glad/include
     3rdParty/glm
     3rdParty/stb
+    3rdParty
     src
     src/core
     src/scene
@@ -31,4 +32,9 @@ target_compile_definitions(snooker PRIVATE
     PATH_TO_ASSETS="${CMAKE_SOURCE_DIR}/assets"
 )
 
-target_link_libraries(snooker glad glfw OpenGL::GL)
+if(APPLE)
+    target_link_libraries(snooker glad glfw OpenGL::GL
+        "-framework CoreAudio" "-framework AudioToolbox" "-framework CoreFoundation")
+else()
+    target_link_libraries(snooker glad glfw OpenGL::GL)
+endif()
