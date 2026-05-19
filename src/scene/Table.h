@@ -13,6 +13,8 @@ public:
 
 private:
     std::unique_ptr<Mesh> surface;
+    std::unique_ptr<Mesh> underPanel;
+    std::vector<std::unique_ptr<Mesh>> sideWalls;
     std::unique_ptr<Mesh> frameL, frameR, frameFar, frameNear;
     std::unique_ptr<Mesh> baulkLine, dMarking;
     std::vector<std::unique_ptr<Mesh>> pockets;

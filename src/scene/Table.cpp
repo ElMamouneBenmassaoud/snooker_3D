@@ -28,6 +28,19 @@ static const float BLACK_X  = -IX + 324.0f * SCALE_MM;   // 324mm from top cushi
 static const float LEG_W  = 0.07f;
 static const float LEG_H  = 0.75f;
 
+// Vertical quad (wall): x0,z0 → x1,z1 from y=y0 to y=y1, facing (nx,0,nz)
+static std::vector<float> makeWall(float x0, float z0, float x1, float z1,
+                                   float nx, float nz, float y0, float y1) {
+    return {
+        x0,y0,z0, nx,0,nz, 0,0,
+        x1,y0,z1, nx,0,nz, 1,0,
+        x1,y1,z1, nx,0,nz, 1,1,
+        x0,y0,z0, nx,0,nz, 0,0,
+        x1,y1,z1, nx,0,nz, 1,1,
+        x0,y1,z0, nx,0,nz, 0,1,
+    };
+}
+
 std::vector<float> Table::makeQuad(float x0, float z0, float x1, float z1,
                                    float tU, float tV, float y) {
     return {
@@ -306,6 +319,19 @@ Table::Table() {
     frameFar  = std::make_unique<Mesh>(makeFrameX(-PZ-FT,-PZ, -PX, PX, -1.0f, 4.0f,1.0f));
     frameNear = std::make_unique<Mesh>(makeFrameX( PZ, PZ+FT, -PX, PX, +1.0f, 4.0f,1.0f));
 
+    // Dark panel just below the playing surface
+    underPanel = std::make_unique<Mesh>(makeQuad(-PX-FT, -PZ-FT, PX+FT, PZ+FT, 1,1, -0.005f));
+
+    // Dark vertical side walls blocking skybox through pocket openings.
+    // Placed 4mm inside the cushion body (behind the inner green face) so they
+    // are hidden by the cushion geometry everywhere except at pocket gaps.
+    const float WY0 = -0.005f, WY1 = CH;
+    const float D   = 0.004f;  // offset into cushion body to avoid z-fighting
+    sideWalls.push_back(std::make_unique<Mesh>(makeWall(-IX-D, -IZ, -IX-D,  IZ,  1,0, WY0, WY1))); // left
+    sideWalls.push_back(std::make_unique<Mesh>(makeWall( IX+D, -IZ,  IX+D,  IZ, -1,0, WY0, WY1))); // right
+    sideWalls.push_back(std::make_unique<Mesh>(makeWall(-IX, -IZ-D,  IX, -IZ-D,  0,1, WY0, WY1))); // far
+    sideWalls.push_back(std::make_unique<Mesh>(makeWall(-IX,  IZ+D,  IX,  IZ+D,  0,-1, WY0, WY1)));// near
+
     // Baulk line and D
     baulkLine = std::make_unique<Mesh>(makeQuad(BAULK_X-0.0015f, -IZ, BAULK_X+0.0015f, IZ, 1,1, 0.003f));
     dMarking  = std::make_unique<Mesh>(makeSemiDisc(BAULK_X, 0.0f, D_RADIUS, 32, 0.003f));
@@ -373,7 +399,9 @@ void Table::draw(Shader& shader, const Texture& feltTex, const Texture& woodTex)
     dMarking->draw();
     for (const auto& s : spots) s->draw();
 
-    // Pockets: black
+    // Under-panel + side walls + pockets: black
     shader.setVec3("objectColor", 0.02f, 0.02f, 0.02f);
+    underPanel->draw();
+    for (const auto& w : sideWalls) w->draw();
     for (const auto& p : pockets) p->draw();
 }

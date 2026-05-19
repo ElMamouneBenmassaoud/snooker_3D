@@ -2,6 +2,7 @@
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include "Shader.h"
 #include <array>
 #include <vector>
@@ -12,12 +13,13 @@ public:
     static constexpr int   COUNT  = 15;
 
     std::array<glm::vec3, COUNT> positions;
+    std::array<glm::quat, COUNT> orients;
 
     explicit RedBalls(const std::array<glm::vec3, COUNT>& positions);
     ~RedBalls();
 
-    // Upload updated positions to GPU (call after physics moves balls)
-    void uploadPositions();
+    // Upload updated positions + orientations to GPU (call after physics step)
+    void uploadInstanceData();
 
     void draw(Shader& shader) const;
 

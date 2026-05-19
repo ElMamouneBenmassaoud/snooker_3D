@@ -1,5 +1,6 @@
 #include "Ball.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <cmath>
 
 static const float PI = 3.14159265f;
@@ -40,7 +41,7 @@ Ball::Ball(glm::vec3 pos, glm::vec3 color)
 }
 
 void Ball::draw(Shader& shader) const {
-    glm::mat4 model = glm::translate(glm::mat4(1.0f), pos);
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), pos) * glm::mat4_cast(orient);
     shader.setMat4("model", model);
     shader.setInt("useTexture", 0);
     shader.setVec3("objectColor", color);

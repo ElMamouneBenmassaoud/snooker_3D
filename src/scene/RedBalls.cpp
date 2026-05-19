@@ -1,4 +1,5 @@
 #include "RedBalls.h"
+#include <glm/gtc/quaternion.hpp>
 #include <cmath>
 
 static const float PI = 3.14159265f;
@@ -32,6 +33,8 @@ std::vector<float> RedBalls::buildSphere() {
 }
 
 RedBalls::RedBalls(const std::array<glm::vec3, COUNT>& pos) : positions(pos) {
+    orients.fill(glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+
     std::vector<float> sphere = buildSphere();
     vertexCount = (int)sphere.size() / 8;
 
@@ -51,14 +54,24 @@ RedBalls::RedBalls(const std::array<glm::vec3, COUNT>& pos) : positions(pos) {
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
-    // Per-instance positions (GL_DYNAMIC_DRAW: updated each frame by physics)
+    // Per-instance data: pos(3 floats) + quat(4 floats) = 7 floats per instance
+    // location 3 = instancePos (vec3), location 4 = instanceQuat (vec4, x,y,z,w)
     glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    glBufferData(GL_ARRAY_BUFFER, COUNT * sizeof(glm::vec3), positions.data(), GL_DYNAMIC_DRAW);
-    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+    glBufferData(GL_ARRAY_BUFFER, COUNT * 7 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+
+    constexpr GLsizei stride = 7 * sizeof(float);
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
     glEnableVertexAttribArray(3);
-    glVertexAttribDivisor(3, 1);   // advance once per instance, not per vertex
+    glVertexAttribDivisor(3, 1);
+
+    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, stride, (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(4);
+    glVertexAttribDivisor(4, 1);
 
     glBindVertexArray(0);
+
+    // Upload initial data
+    uploadInstanceData();
 }
 
 RedBalls::~RedBalls() {
@@ -67,9 +80,20 @@ RedBalls::~RedBalls() {
     glDeleteVertexArrays(1, &VAO);
 }
 
-void RedBalls::uploadPositions() {
+void RedBalls::uploadInstanceData() {
+    // Pack: [pos.x, pos.y, pos.z, quat.x, quat.y, quat.z, quat.w] per instance
+    float data[COUNT * 7];
+    for (int i = 0; i < COUNT; i++) {
+        data[i*7+0] = positions[i].x;
+        data[i*7+1] = positions[i].y;
+        data[i*7+2] = positions[i].z;
+        data[i*7+3] = orients[i].x;
+        data[i*7+4] = orients[i].y;
+        data[i*7+5] = orients[i].z;
+        data[i*7+6] = orients[i].w;
+    }
     glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, COUNT * sizeof(glm::vec3), positions.data());
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(data), data);
 }
 
 void RedBalls::draw(Shader& shader) const {
