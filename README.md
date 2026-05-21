@@ -15,20 +15,36 @@ cd snooker_3D
 git submodule update --init --recursive
 ```
 
-Then build:
+## Platform-specific setup
 
+### macOS
+No extra packages needed, OpenGL is provided by the system.
+
+### Linux
+```bash
+sudo apt install cmake build-essential libgl-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+```
+
+### Windows (MSYS2 / MinGW64)
+Open the MinGW64 terminal and install the required packages:
+```bash
+pacman -S mingw-w64-x86_64-cmake mingw-w64-x86_64-gcc mingw-w64-x86_64-make
+```
+
+
+## Build
+
+### macOS / Linux
 ```bash
 cmake -S . -B build
 cmake --build build
 ```
 
-On **Linux**, you may need to install the following packages first:
-
+### Windows (MinGW64)
 ```bash
-sudo apt install cmake build-essential libgl-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+cmake -S . -B build -G "MinGW Makefiles"
+cmake --build build
 ```
-
-On **macOS**, no extra packages are needed.
 
 
 ## Run
