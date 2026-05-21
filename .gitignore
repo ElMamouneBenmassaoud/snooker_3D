@@ -12,6 +12,7 @@ cmake_install.cmake
 Makefile
 *.cmake
 !CMakeLists.txt
+!3rdParty/**/*.cmake
 
 # Compiled binaries
 snooker
