@@ -24,9 +24,7 @@
 const int WIDTH  = 1280;
 const int HEIGHT = 720;
 
-// ---------------------------------------------------------------------------
 // Global state
-// ---------------------------------------------------------------------------
 
 // Orbital camera (right-click drag or Tab to switch to free mode)
 Camera* gCamera    = nullptr;
@@ -52,18 +50,14 @@ float gStopTimer   = 0.0f;   // seconds elapsed since all balls stopped
 // Game logic trigger — set true when shot is fired, reset after processShot()
 bool  gWaitingForShotResult = false;
 
-// ---------------------------------------------------------------------------
 // 2D power gauge — left strip, drag upward = more power.
-// ---------------------------------------------------------------------------
 const float GAUGE_X    =   42.0f;   // center X of bar
 const float GAUGE_W    =   14.0f;   // half-width
 const float GAUGE_Y_TOP=   80.0f;
 const float GAUGE_Y_BOT=  640.0f;
 const float GAUGE_DRAG_X = 90.0f;   // x < this → power drag zone
 
-// ---------------------------------------------------------------------------
 // Spin selector — circle bottom-right.
-// ---------------------------------------------------------------------------
 const float SPIN_CX = (float)WIDTH  - 80.0f;   // 1200
 const float SPIN_CY = (float)HEIGHT - 95.0f;   // 625
 const float SPIN_R  = 52.0f;
@@ -131,9 +125,7 @@ glm::mat4 gLastProj   = glm::mat4(1.0f);
 static constexpr float BAULK_X  = 0.873f;   // IX - 2*IX*0.207
 static constexpr float D_RADIUS = 0.242f;
 
-// ---------------------------------------------------------------------------
 // GLFW callbacks
-// ---------------------------------------------------------------------------
 void framebuffer_size_callback(GLFWwindow*, int w, int h) { glViewport(0, 0, w, h); }
 static void commitMenuEdit();  // forward declaration
 
@@ -181,7 +173,7 @@ void mouse_button_callback(GLFWwindow*, int button, int action, int) {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
         float mx = (float)gLastX, my = (float)gLastY;
 
-        // --- Setup screen clicks ---
+        // Setup screen clicks
         if (gSetupScreen) {
             // Setup panel constants (must match draw code)
             const float SW = 420.0f, SH = 260.0f;
@@ -198,7 +190,7 @@ void mouse_button_callback(GLFWwindow*, int button, int action, int) {
             return;
         }
 
-        // --- Menu open: route all clicks to menu ---
+        // Menu open: route all clicks to menu
         if (gMenuOpen) {
             // Name input fields
             for (int p = 0; p < 2; ++p) {
@@ -264,13 +256,13 @@ void mouse_button_callback(GLFWwindow*, int button, int action, int) {
             return;
         }
 
-        // --- Menu button (top-left) ---
+        // Menu button (top-left)
         if (hitRect({MNU_BTN_X0, MNU_BTN_Y0, MNU_BTN_X1, MNU_BTN_Y1}, mx, my)) {
             gMenuOpen = true;
             return;
         }
 
-        // --- Camera button (bottom-right) ---
+        // Camera button (bottom-right)
         float cdx = mx - CAM_BTN_CX, cdy = my - CAM_BTN_CY;
         if (cdx*cdx + cdy*cdy <= CAM_BTN_R*CAM_BTN_R) {
             gShotCamMode = !gShotCamMode;
@@ -279,7 +271,7 @@ void mouse_button_callback(GLFWwindow*, int button, int action, int) {
             return;
         }
 
-        // --- Ball-in-hand: any left click confirms placement ---
+        // Ball-in-hand: any left click confirms placement
         if (gBallInHand) {
             gBallInHand = false;
             return;
@@ -337,7 +329,7 @@ void char_callback(GLFWwindow*, unsigned int cp) {
 void key_callback(GLFWwindow*, int key, int, int action, int) {
     if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
 
-    // --- Setup screen input ---
+    // Setup screen input
     if (gSetupScreen) {
         if (key == GLFW_KEY_BACKSPACE && !gSetupBuf[gSetupFocus].empty())
             gSetupBuf[gSetupFocus].pop_back();
@@ -353,7 +345,7 @@ void key_callback(GLFWwindow*, int key, int, int action, int) {
         return;
     }
 
-    // --- In-game keys ---
+    // In-game keys
     if (key == GLFW_KEY_ESCAPE) {
         if (gMenuEditPlayer >= 0) commitMenuEdit();
         else                      gMenuOpen = !gMenuOpen;
@@ -422,10 +414,8 @@ void processInput(GLFWwindow*) {
     // ESC is handled in key_callback (opens/closes menu)
 }
 
-// ---------------------------------------------------------------------------
 // 2D renderer — lazy-init VAO/VBO, orthographic pixel coordinates.
 //   mode = GL_LINES or GL_TRIANGLES
-// ---------------------------------------------------------------------------
 static void draw2D(const std::vector<glm::vec3>& pts, GLenum mode) {
     if (pts.empty()) return;
     static GLuint vao = 0, vbo = 0;
@@ -446,7 +436,6 @@ static void draw2D(const std::vector<glm::vec3>& pts, GLenum mode) {
     glBindVertexArray(0);
 }
 
-// ---------------------------------------------------------------------------
 // Filled rectangle (orthographic 2D coords).
 static void drawRect(float x0, float y0, float x1, float y1) {
     draw2D({{x0,y0,0},{x1,y0,0},{x1,y1,0},
@@ -470,7 +459,6 @@ static float drawText(float x, float y, const std::string& txt, float scale = 1.
     return (float)stb_easy_font_width((char*)txt.c_str()) * scale;
 }
 
-// ---------------------------------------------------------------------------
 // Snooker respawn rule: place ball on its own spot if free, otherwise on the
 // highest-value free spot, otherwise as close as possible to its own spot
 // (toward the black end, then toward the yellow end) without overlapping any ball.
@@ -525,7 +513,6 @@ static glm::vec3 findRespawnPos(const std::vector<BallState>& balls, int ballIdx
     return base;
 }
 
-// ---------------------------------------------------------------------------
 int main() {
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -564,7 +551,7 @@ int main() {
     Camera   camera(glm::vec3(0.0f), 5.5f, 0.0f, 35.0f);
     gCamera = &camera;
 
-    // --- Skybox ---
+    // Skybox
     std::string skyDir = std::string(PATH_TO_ASSETS) + "/skybox/";
     Cubemap skybox({
         skyDir + "right.png",
@@ -580,7 +567,7 @@ int main() {
     skyboxShader.use();
     skyboxShader.setInt("skybox", 1);
 
-    // --- Ball setup ---
+    // Ball setup
     const float B  = Ball::RADIUS;
     const float BY = Ball::RADIUS;
     const float BX = 0.873f;
@@ -662,7 +649,7 @@ int main() {
     // Initial window title showing game state
     glfwSetWindowTitle(window, "Snooker | P1:0  P2:0 | P1: pot a red");
 
-    // --- Background music (miniaudio) ---
+    // Background music (miniaudio)
     ma_engine audioEngine;
     ma_sound  bgMusic;
     bool      audioOk = false;
@@ -688,7 +675,7 @@ int main() {
 
         processInput(window);
 
-        // --- Winner overlay countdown ---
+        // Winner overlay countdown
         if (gWinnerTimer > 0.0f) {
             gWinnerTimer -= dt;
             if (gWinnerTimer <= 0.0f && gPendingReset) {
@@ -698,13 +685,13 @@ int main() {
             }
         }
 
-        // --- Apply music volume ---
+        // Apply music volume
         if (gBgMusic) ma_sound_set_volume(gBgMusic, gMusicVolume);
 
-        // --- Pending reset with no overlay (manual restart) ---
+        // Pending reset with no overlay (manual restart)
         if (gPendingReset && gWinnerTimer <= 0.0f) { resetGame(gResetWinner); }
 
-        // --- Auto-announce + reset on GAME_OVER ---
+        // Auto-announce + reset on GAME_OVER
         static bool gGameOverAnnounced = false;
         if (gameLogic.phase == GamePhase::GAME_OVER) {
             if (!gGameOverAnnounced) {
@@ -725,7 +712,7 @@ int main() {
             gGameOverAnnounced = false;
         }
 
-        // --- Apply names when setup screen is dismissed ---
+        // Apply names when setup screen is dismissed
         if (!gSetupScreen && (gPlayerName[0].empty() || gPlayerName[1].empty())) {
             const char* def[2] = {"Player 1", "Player 2"};
             for (int p = 0; p < 2; ++p)
@@ -741,7 +728,7 @@ int main() {
 
         if (!gMenuOpen && !gSetupScreen) {
 
-        // --- Tab: toggle camera mode (also cancels post-shot overview) ---
+        // Tab: toggle camera mode (also cancels post-shot overview)
         bool tabNow = (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS);
         if (tabNow && !gWasTab) {
             gShotCamMode  = !gShotCamMode;
@@ -750,7 +737,7 @@ int main() {
         }
         gWasTab = tabNow;
 
-        // --- Keyboard controls ---
+        // Keyboard controls
         const float ROT_SPEED   = glm::radians(45.0f);
         const float PWR_SPEED   = 3.0f;   // power units/s  (max=6 → full charge in 2s)
         const float SPIN_SPEED  = 1.2f;   // spin units/s
@@ -816,7 +803,7 @@ int main() {
         if (gBallInHand) physics.balls[0].active = true;
         if (gFoulTimer > 0.0f) gFoulTimer -= dt;
 
-        // --- Cue ball pocketed → enter ball-in-hand mode (player places ball in D) ---
+        // Cue ball pocketed → enter ball-in-hand mode (player places ball in D)
         // Wait until ALL other balls have stopped and finished sinking first.
         {
             auto& cb = physics.balls[0];
@@ -846,7 +833,7 @@ int main() {
             }
         }
 
-        // --- Ball-in-hand: project cursor onto table plane, constrain to D semi-circle ---
+        // Ball-in-hand: project cursor onto table plane, constrain to D semi-circle
         if (gBallInHand) {
             float xNDC = (2.0f * (float)gLastX / WIDTH)  - 1.0f;
             float yNDC = 1.0f - (2.0f * (float)gLastY / HEIGHT);
@@ -910,7 +897,7 @@ int main() {
             }
         }
 
-        // --- Sync positions + orientations ---
+        // Sync positions + orientations
         for (int i = 0; i < 7; i++) {
             balls[i].pos    = physics.balls[i].pos;
             balls[i].orient = physics.balls[i].orient;
@@ -938,7 +925,7 @@ int main() {
         bool anySinkingNow = false;
         for (const auto& b : physics.balls) if (b.sinking) { anySinkingNow = true; break; }
 
-        // --- Process shot result once all balls have stopped and finished sinking ---
+        // Process shot result once all balls have stopped and finished sinking
         if (gWaitingForShotResult && allStoppedNow && !anySinkingNow) {
             int redsOnTable = 0;
             for (int i = 7; i < (int)physics.balls.size(); i++)
@@ -1003,7 +990,7 @@ int main() {
             gWaitingForShotResult = false;
         }
 
-        // --- Post-shot timer: auto-return to shot cam 2 s after all balls stop ---
+        // Post-shot timer: auto-return to shot cam 2 s after all balls stop
         if (gBallsMoving) {
             if (!allStoppedNow) {
                 gStopTimer = 0.0f;
@@ -1019,7 +1006,7 @@ int main() {
 
         } // end if (!gMenuOpen)
 
-        // --- View matrix ---
+        // View matrix
         glm::mat4 view;
         glm::vec3 viewPos;
         if (gBallInHand) {
@@ -1055,14 +1042,14 @@ int main() {
         gLastView = view;
         gLastProj = projection;
 
-        // --- 3D render ---
+        // 3D render
         // Use wide panoramic projection during post-shot overview
         const glm::mat4& activeProj = projection;
 
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // --- Skybox (draw first, depth test off so it never fails the z=1 vs clear=1 comparison) ---
+        // Skybox (draw first, depth test off so it never fails the z=1 vs clear=1 comparison)
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_FALSE);
         skyboxShader.use();
@@ -1105,13 +1092,13 @@ int main() {
             aimGuide.draw(flatShader);
         }
 
-        // --- 2D HUD overlay ---
+        // 2D HUD overlay
         glDisable(GL_DEPTH_TEST);
         flatShader.use();
         flatShader.setMat4("projection", ortho2D);
         flatShader.setMat4("view", glm::mat4(1.0f));
 
-        // ---- MENU button (top-left corner) ----
+        // Menu button (top-left corner)
         {
             float mx = (float)gLastX, my = (float)gLastY;
             bool hov = hitRect({MNU_BTN_X0, MNU_BTN_Y0, MNU_BTN_X1, MNU_BTN_Y1}, mx, my);
@@ -1144,7 +1131,7 @@ int main() {
             float t     = gCuePower / 6.0f;
             float fillY = GAUGE_Y_BOT - t * (GAUGE_Y_BOT - GAUGE_Y_TOP);
 
-            // --- Power gauge ---
+            // Power gauge
             // Background
             flatShader.setVec3("lineColor", 0.10f, 0.10f, 0.10f);
             draw2D({ {GX0,GAUGE_Y_TOP,0},{GX1,GAUGE_Y_TOP,0},{GX1,GAUGE_Y_BOT,0},
@@ -1176,7 +1163,7 @@ int main() {
                 draw2D({ {GX0,ty,0},{GX0+6,ty,0}, {GX1-6,ty,0},{GX1,ty,0} }, GL_LINES);
             }
 
-            // --- Spin selector ---
+            // Spin selector
             // Outer circle
             const int SEGS = 48;
             std::vector<glm::vec3> circlePts;
@@ -1233,7 +1220,7 @@ int main() {
             draw2D(dotPts, GL_TRIANGLES);
         } // end gauge + spin
 
-        // ---- HUD: single centered top bar ----
+        // HUD: single centered top bar
         {
             const float BAR_W  = 740.0f;
             const float BAR_H  = 64.0f;
@@ -1278,7 +1265,7 @@ int main() {
                 drawText(x, y, s, scale);
             };
 
-            // --- Player 1 section ---
+            // Player 1 section
             bool p1active = (cp == 0);
             float p1b = topDown ? 0.35f : (p1active ? 1.0f : 0.38f);
             if (p1active && !topDown) flatShader.setVec3("lineColor", 1.0f, 0.80f, 0.15f);
@@ -1299,7 +1286,7 @@ int main() {
             float s1w = (float)stb_easy_font_width((char*)sc1.c_str()) * 3.0f;
             drawText(DIV1 - s1w - 10.f, BAR_Y0+28.f, sc1, 3.0f);
 
-            // --- Player 2 section ---
+            // Player 2 section
             bool p2active = (cp == 1);
             float p2b = topDown ? 0.35f : (p2active ? 1.0f : 0.38f);
             if (p2active && !topDown) flatShader.setVec3("lineColor", 1.0f, 0.80f, 0.15f);
@@ -1327,7 +1314,7 @@ int main() {
             std::string sc2 = std::to_string(gameLogic.scores[1]);
             drawText(DIV2 + 10.f, BAR_Y0+28.f, sc2, 3.0f);
 
-            // --- Center section: action text + break ---
+            // Center section: action text + break
             {
                 float midX = (DIV1 + DIV2) * 0.5f;
                 float ct = topDown ? 0.42f : 0.95f;
@@ -1345,7 +1332,7 @@ int main() {
             }
         }
 
-        // ---- Camera toggle button (bottom-right, to the left of spin selector) ----
+        // Camera toggle button (bottom-right, to the left of spin selector)
         if (!gBallsMoving && !gBallInHand) {
             bool camHover = false;
             {
@@ -1411,7 +1398,7 @@ int main() {
             drawText(CAM_BTN_CX - modeW*0.5f, CAM_BTN_CY + CAM_BTN_R + 4.f, modeStr, 1.1f);
         }
 
-        // ---- Ball-in-hand indicator ----
+        // Ball-in-hand indicator
         if (gBallInHand) {
             const char* msg = "Place the white ball in the D  (click to confirm)";
             flatShader.setVec3("lineColor", 0.08f, 0.08f, 0.10f);
@@ -1422,7 +1409,7 @@ int main() {
             drawText(mx, (float)HEIGHT - 36.f, msg, 1.5f);
         }
 
-        // ---- Winner announcement overlay ----
+        // Winner announcement overlay
         if (gWinnerTimer > 0.0f && !gWinnerMsg.empty()) {
             // Dim background
             flatShader.setVec3("lineColor", 0.0f, 0.0f, 0.02f);
@@ -1470,7 +1457,7 @@ int main() {
             drawRect(OX0+15.f, OY1-12.f, OX0+15.f+barW, OY1-5.f);
         }
 
-        // ---- Startup name panel ----
+        // Startup name panel
         if (gSetupScreen) {
             const float SW = 420.0f, SH = 260.0f;
             const float SX0 = (float)WIDTH*0.5f - SW*0.5f;
@@ -1548,7 +1535,7 @@ int main() {
             drawText(SX0+SW*0.5f-hw*0.5f, SY1-12.f, hint, 1.1f);
         }
 
-        // ---- FOUL overlay ----
+        // FOUL overlay
         if (gFoulTimer > 0.0f) {
             const float FX0 = 400.f, FX1 = 880.f;
             const float FY0 = 268.f, FY1 = 390.f;
@@ -1571,7 +1558,7 @@ int main() {
             drawText((FX0 + FX1) * 0.5f - pw * 0.5f, FY0 + 88.f, gFoulLine2, 2.2f);
         }
 
-        // ---- Menu overlay (Escape to toggle) ----
+        // Menu overlay (Escape to toggle)
         if (gMenuOpen) {
             // Full-screen dark tint
             flatShader.setVec3("lineColor", 0.0f, 0.0f, 0.0f);

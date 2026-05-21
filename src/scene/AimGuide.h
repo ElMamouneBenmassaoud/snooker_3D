@@ -7,7 +7,6 @@
 #include "Shader.h"
 #include "Physics.h"
 
-// ---------------------------------------------------------------------------
 // Multi-group aim guide rendered with flat-color GL_LINES.
 //
 // Groups:
@@ -16,7 +15,6 @@
 //   2 — CYAN   dashed 1.5px : target ball direction (collision normal)
 //   3 — AMBER  dashed 1.5px : cue ball deflection after impact
 //   4 — AMBER  thin   1.0px : power stick indicator (behind cue ball)
-// ---------------------------------------------------------------------------
 struct LineGroup {
     std::vector<glm::vec3> pts;
     glm::vec3 color     = glm::vec3(1.0f);

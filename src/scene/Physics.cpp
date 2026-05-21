@@ -3,12 +3,10 @@
 #include <algorithm>
 #include <glm/gtc/quaternion.hpp>
 
-// ---------------------------------------------------------------------------
 // Pocket centres at the inner cushion boundary corners/midpoints.
 // Using IX/IZ so they stay in sync with the cushion wall positions.
 //   4 corners : (±IX, ±IZ)   r = 0.062
 //   2 middle  : (  0, ±IZ)   r = 0.068  (slightly larger opening)
-// ---------------------------------------------------------------------------
 const std::array<glm::vec2, 6> Physics::POCKETS = {{
     { -Physics::IX, -Physics::IZ },   // far-left  corner
     {  0.00f,       -Physics::IZ },   // far       middle
@@ -23,20 +21,17 @@ const std::array<float, 6> Physics::POCKET_R = {{
     0.062f, 0.068f, 0.062f,
 }};
 
-// ---------------------------------------------------------------------------
 void Physics::resetShotTracking() {
     shotFirstContact = -1;
     shotPottedBalls.clear();
 }
 
-// ---------------------------------------------------------------------------
 Physics::Physics(const std::vector<glm::vec3>& initialPositions) {
     balls.resize(initialPositions.size());
     for (int i = 0; i < (int)initialPositions.size(); i++)
         balls[i].pos = initialPositions[i];
 }
 
-// ---------------------------------------------------------------------------
 void Physics::update(float frameTime) {
     accumulator += frameTime;
     while (accumulator >= DT) {
@@ -45,7 +40,6 @@ void Physics::update(float frameTime) {
     }
 }
 
-// ---------------------------------------------------------------------------
 void Physics::step() {
     // 0. Pocket-sink animation (runs independently of physics)
     for (auto& b : balls) {
@@ -95,7 +89,6 @@ void Physics::step() {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Two-regime friction model with spin (angular velocity ω).
 //
 // Contact point directly below centre: r_c = (0, -R, 0)
@@ -110,7 +103,6 @@ void Physics::step() {
 // Rolling regime (|v_slip| ≤ ε):
 //   enforce rolling constraint: ω.z = -v.x/R, ω.x = v.z/R
 //   apply rolling friction to slow v_cm down
-// ---------------------------------------------------------------------------
 void Physics::applyFriction(BallState& b) {
     static const glm::vec3 R_C(0.0f, -RADIUS, 0.0f);          // contact point
     static const float     I_INV = 5.0f / (2.0f * RADIUS * RADIUS); // 1/(I/m)
@@ -121,8 +113,7 @@ void Physics::applyFriction(BallState& b) {
     float     slip      = glm::length(v_slip);
 
     if (slip > 0.001f) {
-        // --- Sliding regime ---
-        // Clamp friction so the coupled (vel+spin) slip never overshoots zero.
+        // Sliding regime: clamp friction so the coupled (vel+spin) slip never overshoots zero.
         // The coupled system reduces slip by (7/2)*f*DT per step, so the maximum
         // force that brings slip exactly to zero without reversing is slip/(3.5*DT).
         float f_mag = std::min(MU_K * G, slip / (3.5f * DT));
@@ -130,7 +121,7 @@ void Physics::applyFriction(BallState& b) {
         b.vel  += f * DT;
         b.spin += glm::cross(R_C, f) * I_INV * DT;
     } else {
-        // --- Rolling regime ---
+        // Rolling regime
         float speed = glm::length(b.vel);
         if (speed < V_STOP) {
             b.vel  = glm::vec3(0.0f);
@@ -149,7 +140,6 @@ void Physics::applyFriction(BallState& b) {
     }
 }
 
-// ---------------------------------------------------------------------------
 // Apply a cue strike to the cue ball.
 //
 // u, v ∈ [-1, 1] (spin selector, constrained to unit circle):
@@ -177,7 +167,6 @@ void Physics::applyFriction(BallState& b) {
 //   cueBall.spin.y = -u * power/R * SIDE_SCALE
 //   Affects cushion rebounds (running / check side). No table-felt interaction
 //   because ω_y × r_c = 0 at the contact point r_c = (0, -R, 0).
-// ---------------------------------------------------------------------------
 void Physics::applyCueStrike(BallState& cueBall,
                               glm::vec3 shotDir, float power,
                               float u, float v) {
@@ -188,32 +177,23 @@ void Physics::applyCueStrike(BallState& cueBall,
     cueBall.vel  = shotDir * power;
     cueBall.spin = glm::vec3(0.0f);
 
-    // ---- Back / top spin (v axis) ----------------------------------------
-    // ω_roll is the angular velocity for pure rolling in the shot direction.
+    // Back / top spin (v axis): ω_roll is the angular velocity for pure rolling in the shot direction.
     // Rolling constraint in applyFriction:  spin.z = -vel.x/R, spin.x = vel.z/R
     //   →  ω_roll = cross(up, shotDir) * power/R
     const float SPIN_SCALE = 1.8f;
     glm::vec3 omega_roll = glm::cross(up, shotDir) * (power / RADIUS);
     cueBall.spin += omega_roll * (v * SPIN_SCALE);
 
-    // ---- Side spin (u axis) -----------------------------------------------
-    // Rotates ball around vertical Y-axis. Manifests at cushion rebounds.
+    // Side spin (u axis): rotates ball around vertical Y-axis, manifests at cushion rebounds.
     // u > 0 → effet droit (ωy > 0): ball deflects RIGHT on far/near cushions
     // u < 0 → effet gauche (ωy < 0): ball deflects LEFT on far/near cushions
     const float SIDE_SCALE = 0.7f;
     cueBall.spin.y = u * (power / RADIUS) * SIDE_SCALE;
 }
 
-// ---------------------------------------------------------------------------
-// Sphere-plane intersection (RTR Ch22):
-//   signed distance from ball centre to each wall plane = ball coord - wall offset
-//   collision when |dist| < RADIUS  AND  ball moving toward the wall
-//   response: reflect normal component scaled by restitution E_BC
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Sphere-plane: cushion collisions with side-spin deflection.
+// Sphere-plane: cushion collisions with side-spin deflection (RTR Ch22).
 //
-// Normal reflection: v_normal *= -E_BC  (existing behaviour).
+// Normal reflection: v_normal *= -E_BC.
 //
 // Side-spin (ω_y) deflection — spin-only contribution, no translational
 // component, to avoid amplifying the ball's tangential speed:
@@ -226,7 +206,6 @@ void Physics::applyCueStrike(BallState& cueBall,
 //
 //   MU_CUSH = 0.08: small coefficient — spin is a gentle redirection, not
 //   a speed amplifier.  ω_y decays by SPIN_RETAIN each contact.
-// ---------------------------------------------------------------------------
 void Physics::resolveCushions(BallState& b) {
     const float CORNER_GAP  = POCKET_R[0];
     const float MIDDLE_GAP  = POCKET_R[1] * 1.1f;
@@ -297,7 +276,6 @@ void Physics::resolveCushions(BallState& b) {
     (void)spinR;  // silence unused-variable warning if no cushion was hit
 }
 
-// ---------------------------------------------------------------------------
 // Sphere-sphere collision with Continuous Collision Detection (CCD).
 //
 // At max power (6 m/s) a ball moves 6/120 = 0.05 m per step, larger than
@@ -314,7 +292,6 @@ void Physics::resolveCushions(BallState& b) {
 //   apply impulse at contact point, advance both balls the remaining
 //   (1-t)·DT with the post-impulse velocities.
 // Case 3 — no intersection this step: skip.
-// ---------------------------------------------------------------------------
 bool Physics::resolveBallBall(BallState& a, BallState& b) {
     const float minD = 2.0f * RADIUS;
 
@@ -322,7 +299,7 @@ bool Physics::resolveBallBall(BallState& a, BallState& b) {
     float     c0 = glm::dot(d0, d0) - minD * minD; // > 0 → separate, ≤ 0 → overlap
 
     if (c0 <= 0.0f) {
-        // --- Case 1: already overlapping → standard resolution ---
+        // Case 1: already overlapping → standard resolution
         glm::vec3 diff  = a.pos - b.pos;
         float     dist2 = glm::dot(diff, diff);
         if (dist2 < 1e-8f) return false;
@@ -339,7 +316,7 @@ bool Physics::resolveBallBall(BallState& a, BallState& b) {
         return true;
     }
 
-    // --- Case 2: CCD swept test ---
+    // Case 2: CCD swept test
     glm::vec3 dv = (a.pos - a.prevPos) - (b.pos - b.prevPos);
     float A  = glm::dot(dv, dv);
     if (A < 1e-12f) return false;
@@ -372,13 +349,11 @@ bool Physics::resolveBallBall(BallState& a, BallState& b) {
     return true;
 }
 
-// ---------------------------------------------------------------------------
 // Pocket detection with swept check:
 //   1. Direct distance test at current position.
 //   2. Closest-point-on-segment test (prevPos → pos) to catch fast balls that
 //      tunnel through the capture radius in a single step.
 //   3. Safety boundary: ball escaped the table → sink unconditionally.
-// ---------------------------------------------------------------------------
 void Physics::checkPocket(BallState& b, int idx) {
     auto sink = [&]() {
         b.sinking = true; b.sinkT = 0.0f;
@@ -397,11 +372,11 @@ void Physics::checkPocket(BallState& b, int idx) {
         if (i == 1 && b.pos.z > -IZ + RADIUS * 0.5f) continue;  // far middle
         if (i == 4 && b.pos.z <  IZ - RADIUS * 0.5f) continue;  // near middle
 
-        // --- 1. Direct check ---
+        // 1. Direct check
         float dx = b.pos.x - px, dz = b.pos.z - pz;
         if (dx*dx + dz*dz < pr*pr) { sink(); return; }
 
-        // --- 2. Swept check (prevPos → pos segment vs pocket circle in XZ) ---
+        // 2. Swept check (prevPos → pos segment vs pocket circle in XZ)
         glm::vec3 seg  = b.pos - b.prevPos;
         float     len2 = glm::dot(seg, seg);
         if (len2 > 1e-8f) {
@@ -414,16 +389,14 @@ void Physics::checkPocket(BallState& b, int idx) {
         }
     }
 
-    // --- 3. Safety: ball completely escaped table geometry ---
+    // 3. Safety: ball completely escaped table geometry
     if (std::abs(b.pos.x) > IX + 0.12f || std::abs(b.pos.z) > IZ + 0.12f)
         sink();
 }
 
-// ---------------------------------------------------------------------------
 // Ray-sphere intersection — PBR book 4th ed., Ch6.1
 //   Numerically robust half-b form to avoid catastrophic cancellation.
 //   Solves: a*t² + 2*hb*t + c = 0
-// ---------------------------------------------------------------------------
 bool Physics::raySphereIntersect(glm::vec3 origin, glm::vec3 dir,
                                   glm::vec3 center, float radius,
                                   float& tMin, float& tMax) {

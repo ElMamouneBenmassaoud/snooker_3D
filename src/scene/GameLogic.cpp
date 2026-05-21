@@ -61,7 +61,7 @@ ShotResult GameLogic::processShot(int firstContact,
     bool cuePotted = std::find(potted.begin(), potted.end(), 0) != potted.end();
     res.cueBallFoul = cuePotted;
 
-    // ----- Foul detection -----
+    // Foul detection
     bool foul = false;
     if (firstContact == -1 || cuePotted) {
         foul = true;
@@ -80,7 +80,7 @@ ShotResult GameLogic::processShot(int firstContact,
         if (firstContact != 6) foul = true;  // must hit the black
     }
 
-    // ----- BLACK_SHOOTOUT foul: opponent wins immediately -----
+    // BLACK_SHOOTOUT foul: opponent wins immediately
     if (foul && phase == GamePhase::BLACK_SHOOTOUT) {
         res.foul        = true;
         res.foulPenalty = 7;
@@ -118,7 +118,7 @@ ShotResult GameLogic::processShot(int firstContact,
         return res;
     }
 
-    // ----- Valid shot -----
+    // Valid shot
     if (phase == GamePhase::RED_PHASE) {
         if (expectingRed) {
             int redsIn = 0;

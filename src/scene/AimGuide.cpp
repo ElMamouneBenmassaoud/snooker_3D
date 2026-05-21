@@ -9,7 +9,6 @@ static const float DASH_LEN  = 0.040f;
 static const float GAP_LEN   = 0.020f;
 static const int   GHOST_SEGS = 40;
 
-// ---------------------------------------------------------------------------
 static void appendDashed(std::vector<glm::vec3>& pts,
                           glm::vec3 p0, glm::vec3 p1)
 {
@@ -37,11 +36,9 @@ static void appendCircleXZ(std::vector<glm::vec3>& pts,
     }
 }
 
-// ---------------------------------------------------------------------------
 // Estimated stopping distance of cue ball at speed v0:
 //   sliding phase  d1 = 12·v0² / (49·μk·g)
 //   rolling phase  d2 = 25·v0² / (98·μr·g)
-// ---------------------------------------------------------------------------
 static float estimateReach(float v0)
 {
     const float d1 = 12.0f * v0*v0 / (49.0f * Physics::MU_K * Physics::G);
@@ -49,9 +46,7 @@ static float estimateReach(float v0)
     return d1 + d2;
 }
 
-// ---------------------------------------------------------------------------
 // Distance from point P to line segment AB (in XZ, ignoring Y).
-// ---------------------------------------------------------------------------
 static float pointSegDistXZ(glm::vec3 A, glm::vec3 B, glm::vec3 P)
 {
     glm::vec2 ab(B.x-A.x, B.z-A.z);
@@ -65,7 +60,6 @@ static float pointSegDistXZ(glm::vec3 A, glm::vec3 B, glm::vec3 P)
     return sqrtf(dx*dx + dz*dz);
 }
 
-// ---------------------------------------------------------------------------
 AimGuide::AimGuide() {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -81,7 +75,6 @@ AimGuide::~AimGuide() {
     glDeleteVertexArrays(1, &VAO);
 }
 
-// ---------------------------------------------------------------------------
 void AimGuide::update(const glm::vec3& cueBallPos,
                        const glm::vec3& shotDir,
                        const std::vector<BallState>& balls,
@@ -96,16 +89,14 @@ void AimGuide::update(const glm::vec3& cueBallPos,
     // Estimated reach when charging; infinite when idle (just aiming)
     float reach = (power > 0.001f) ? estimateReach(power) : 1e30f;
 
-    // --- Ray-to-wall helper (shared by cue and target ball tracing) ----------
+    // Ray-to-wall helper, shared by cue and target ball tracing
     auto ct = [](float wall, float orig, float dir) -> float {
         if (std::abs(dir) < 1e-6f) return 1e30f;
         float t = (wall - orig) / dir;
         return (t > 0.001f) ? t : 1e30f;
     };
 
-    // ------------------------------------------------------------------
     // 1.  Find first obstruction on cue ball ray (ball or cushion)
-    // ------------------------------------------------------------------
     float tMin    = 1e30f;
     int   hitBall = -1;
 
@@ -126,17 +117,13 @@ void AimGuide::update(const glm::vec3& cueBallPos,
     glm::vec3 ghostPos = cueBallPos + shotDir * tMin;
     glm::vec3 pathEnd  = cueBallPos + shotDir * std::min(tMin, reach);
 
-    // ------------------------------------------------------------------
     // Group 0 — WHITE solid: cue ball path
-    // ------------------------------------------------------------------
     groups[0].pts.push_back(cueBallPos);
     groups[0].pts.push_back(pathEnd);
 
     bool willReach = (reach >= tMin);
 
-    // ------------------------------------------------------------------
     // Group 1 — WHITE thin: ghost ball circle at impact
-    // ------------------------------------------------------------------
     if (willReach)
         appendCircleXZ(groups[1].pts, ghostPos, R);
 
@@ -145,9 +132,7 @@ void AimGuide::update(const glm::vec3& cueBallPos,
         glm::vec3 n         = glm::normalize(ghostPos - balls[hitBall].pos);
         glm::vec3 targetDir = -n;   // target ball travels AWAY from cue ball
 
-        // ------------------------------------------------------------------
         // 2.  Trace target ball to first cushion (or max 1.8 m)
-        // ------------------------------------------------------------------
         glm::vec3 tPos = balls[hitBall].pos;
         float tToCush = std::min({
             ct( IX-R, tPos.x, targetDir.x),
@@ -158,9 +143,7 @@ void AimGuide::update(const glm::vec3& cueBallPos,
         tToCush = std::min(tToCush, 1.8f);
         glm::vec3 targetEnd = tPos + targetDir * tToCush;
 
-        // ------------------------------------------------------------------
         // 3.  Check if target ball path passes near a pocket
-        // ------------------------------------------------------------------
         int   pocketIdx  = -1;
         float pocketDist = 1e30f;
         for (int p = 0; p < 6; p++) {
@@ -173,11 +156,9 @@ void AimGuide::update(const glm::vec3& cueBallPos,
             }
         }
 
-        // ------------------------------------------------------------------
         // Group 2 — YELLOW: target ball direction
         //   • path aligned with a pocket → full line to pocket, pocket circle
         //   • no pocket in sight         → shorter line (~half the trace)
-        // ------------------------------------------------------------------
         if (pocketIdx >= 0) {
             // Draw right up to the pocket centre
             glm::vec3 pocketPos(Physics::POCKETS[pocketIdx].x, 0.0f,
@@ -196,9 +177,7 @@ void AimGuide::update(const glm::vec3& cueBallPos,
             groups[2].pts.push_back(tPos + targetDir * shortLen);
         }
 
-        // ------------------------------------------------------------------
         // Group 3 — AMBER dashed: cue ball deflection after impact
-        // ------------------------------------------------------------------
         glm::vec3 deflect = shotDir - glm::dot(shotDir, n) * n;
         float     dLen    = glm::length(deflect);
         if (dLen > 0.05f) {
@@ -208,9 +187,7 @@ void AimGuide::update(const glm::vec3& cueBallPos,
         }
     }
 
-    // ------------------------------------------------------------------
     // Group 4 — AMBER thin: power stick indicator
-    // ------------------------------------------------------------------
     if (power > 0.001f) {
         float stick = (power / 6.0f) * 0.32f;
         groups[4].pts.push_back(cueBallPos);
@@ -220,12 +197,10 @@ void AimGuide::update(const glm::vec3& cueBallPos,
     for (auto& g : groups) upload(g);
 }
 
-// ---------------------------------------------------------------------------
 void AimGuide::upload(LineGroup& g) {
     g.ptCount = (int)g.pts.size();
 }
 
-// ---------------------------------------------------------------------------
 void AimGuide::draw(Shader& flatShader) const {
     glBindVertexArray(VAO);
     for (const auto& g : groups) {
